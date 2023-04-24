@@ -1,0 +1,6 @@
+{
+    "email_queue_service_endpoint": "tcp://127.0.0.1:36370",
+    "email_service_endpoint": "tcp://127.0.0.1:31114",
+    "gpt_queue_service_endpoint": "tcp://127.0.0.1:36369",
+    "gpt_service_endpoint": "tcp://127.0.0.1:11997"
+}

@@ -1,18 +1,18 @@
-from os import environ
 from sys import stderr
 from typing import Dict, List
 
-from pyservice import gpt
-
+from configuration import Configuration
 from gpt import GptService
 from mail import MailService
+from pyservice import gpt
 
 AGENT_EMAIL_ADDRESS = 'thevoicekorea+chat@gmail.com'
 
 
-def main(endpoints: Dict[str, str]) -> None:
-    mail_service = MailService(endpoints['email'], AGENT_EMAIL_ADDRESS)
-    gpt_service = GptService(endpoints['gpt'])
+def main(configuration: Configuration) -> None:
+    mail_service = MailService(
+        configuration['email_service_endpoint'], AGENT_EMAIL_ADDRESS)
+    gpt_service = GptService(configuration['gpt_service_endpoint'])
     thread = mail_service.next_thread()
     if thread:
         gpt_messages: List[gpt.Message] = [
@@ -41,8 +41,9 @@ def main(endpoints: Dict[str, str]) -> None:
 
 
 if __name__ == '__main__':
-    endpoints = {
-        'email': environ['EMAIL_SERVICE_ENDPOINT'],
-        'gpt': environ['GPT_SERVICE_ENDPOINT'],
-    }
-    main(endpoints)
+    try:
+        configuration = Configuration.read('agent.json')
+    except Exception:
+        print('Configuration file [agent.json] missing.', file=stderr)
+        exit(1)
+    main(configuration)

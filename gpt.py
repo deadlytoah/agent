@@ -9,7 +9,7 @@ class GptService:
     def __init__(self, endpoint):
         self.endpoint = endpoint
 
-    def complete(self, messages: List[Message]) -> List[Message]:
+    async def complete(self, messages: List[Message]) -> List[Message]:
         """
         Sends a list of messages to the GPT-3 API.
 
@@ -25,5 +25,5 @@ class GptService:
         """
         messages_as_string = [json.dumps(
             message.to_dictionary()) for message in messages]
-        response = client.call(self.endpoint, 'complete', messages_as_string)
+        response = await client.call(self.endpoint, 'complete', messages_as_string)
         return [Message.from_dictionary(json.loads(message)) for message in response]

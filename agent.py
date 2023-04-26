@@ -1,3 +1,4 @@
+import asyncio
 from sys import stderr
 from typing import Dict, List
 
@@ -9,11 +10,11 @@ from pyservice import gpt
 AGENT_EMAIL_ADDRESS = 'thevoicekorea+chat@gmail.com'
 
 
-def main(configuration: Configuration) -> None:
+async def main(configuration: Configuration) -> None:
     mail_service = MailService(
         configuration['email_service_endpoint'], AGENT_EMAIL_ADDRESS)
     gpt_service = GptService(configuration['gpt_service_endpoint'])
-    thread = mail_service.next_thread()
+    thread = await mail_service.next_thread()
     if thread:
         gpt_messages: List[gpt.Message] = [
             gpt.SystemMessage("You are a helpful assistant.")]
@@ -33,9 +34,9 @@ def main(configuration: Configuration) -> None:
                 print(
                     f'expected from and to headers.  Message with problem: {message}', file=stderr)
                 raise
-        response = gpt_service.complete(gpt_messages)
-        mail_service.reply(thread, response[0].text)
-        mail_service.archive_thread(thread.id)
+        response = await gpt_service.complete(gpt_messages)
+        await mail_service.reply(thread, response[0].text)
+        await mail_service.archive_thread(thread.id)
     else:
         print('No more e-mail threads.', file=stderr)
 
@@ -46,4 +47,4 @@ if __name__ == '__main__':
     except Exception:
         print('Configuration file [agent.json] missing.', file=stderr)
         exit(1)
-    main(configuration)
+    asyncio.run(main(configuration))

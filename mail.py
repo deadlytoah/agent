@@ -11,7 +11,7 @@ class MailService:
         self.endpoint = endpoint
         self.address_of_sender = address_of_sender
 
-    def next_thread(self) -> Optional[Thread]:
+    async def next_thread(self) -> Optional[Thread]:
         """
         Gets the next thread from the Gmail account.
 
@@ -24,7 +24,7 @@ class MailService:
             GmailException: If an error occurs while fetching the next
                             thread from the Gmail API.
         """
-        response = client.call(self.endpoint, 'thread')
+        response = await client.call(self.endpoint, 'thread')
         if len(response) > 0:
             thread_id = response[0]
             thread_messages: List[str] = response[1:]
@@ -44,7 +44,7 @@ class MailService:
         else:
             return None
 
-    def reply(self, thread: Thread, body: str):
+    async def reply(self, thread: Thread, body: str):
         """
         Replies to a thread with a message.
 
@@ -77,9 +77,9 @@ class MailService:
             last_message.headers['Subject'],
             body,
         ]
-        client.call(self.endpoint, 'reply', arguments)
+        await client.call(self.endpoint, 'reply', arguments)
 
-    def archive_thread(self, thread_id: str):
+    async def archive_thread(self, thread_id: str):
         """
         Archives a thread.
 
@@ -90,4 +90,4 @@ class MailService:
             GmailException: If an error occurs while archiving the
                             thread.
         """
-        client.call(self.endpoint, 'archive', [str(thread_id)])
+        await client.call(self.endpoint, 'archive', [str(thread_id)])

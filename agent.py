@@ -33,7 +33,7 @@ def main(configuration: Configuration) -> None:
                 print(
                     f'expected from and to headers.  Message with problem: {message}', file=stderr)
                 raise
-        response = gpt_service.send(gpt_messages)
+        response = gpt_service.complete(gpt_messages)
         mail_service.reply(thread, response[0].text)
         mail_service.archive_thread(thread.id)
     else:

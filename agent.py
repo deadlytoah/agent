@@ -44,9 +44,6 @@ async def main(configuration: Configuration) -> None:
 
 
 if __name__ == '__main__':
-    try:
-        configuration = Configuration.read('agent.json')
-    except Exception:
-        print('Configuration file [agent.json] missing.', file=stderr)
-        exit(1)
+    configuration = Configuration.read('agent.json')
+    configuration.validate()
     asyncio.run(main(configuration))

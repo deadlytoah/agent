@@ -1,19 +1,21 @@
 import asyncio
 from sys import stderr
-from typing import Dict, List
+from typing import List
 
 from configuration import Configuration
-from gpt import GptService
-from mail import MailService
-from pyservice import gpt
+from proxy import gpt, mail, msgq
 
 AGENT_EMAIL_ADDRESS = 'thevoicekorea+chat@gmail.com'
 
 
 async def main(configuration: Configuration) -> None:
-    mail_service = MailService(
+    mail_service = mail.Service(
         configuration['email_service_endpoint'], AGENT_EMAIL_ADDRESS)
-    gpt_service = GptService(configuration['gpt_service_endpoint'])
+    mail_msgq_service = msgq.Service(
+        configuration['email_queue_service_endpoint'])
+    gpt_service = gpt.Service(configuration['gpt_service_endpoint'])
+    gpt_msgq_service = msgq.Service(
+        configuration['gpt_queue_service_endpoint'])
     thread = await mail_service.next_thread()
     if thread:
         gpt_messages: List[gpt.Message] = [

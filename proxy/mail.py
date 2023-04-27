@@ -6,7 +6,7 @@ from pyservice import ProtocolException, client
 from pyservice.email import Headers, Message, Thread
 
 
-class MailService:
+class Service:
     def __init__(self, endpoint: str, address_of_sender: str):
         self.endpoint = endpoint
         self.address_of_sender = address_of_sender

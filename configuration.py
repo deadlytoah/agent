@@ -7,6 +7,14 @@ class Configuration(dict):
     Configuration for the agent.
     """
 
+    __REQUIRED_KEYS__ = [
+        'email_service_endpoint',
+        'email_queue_service_endpoint',
+        'gpt_service_endpoint',
+        'gpt_queue_service_endpoint',
+        'email_polling_interval'
+    ]
+
     def __init__(self) -> None:
         super(Configuration, self).__init__()
 
@@ -18,14 +26,9 @@ class Configuration(dict):
         :rtype: None
         :raises ValueError: If the configuration is invalid.
         """
-        if 'email_service_endpoint' not in self:
-            raise ValueError('email_service_endpoint is required')
-        if 'email_queue_service_endpoint' not in self:
-            raise ValueError('email_queue_service_endpoint is required')
-        if 'gpt_service_endpoint' not in self:
-            raise ValueError('gpt_service_endpoint is required')
-        if 'gpt_queue_service_endpoint' not in self:
-            raise ValueError('gpt_queue_service_endpoint is required')
+        for key in self.__REQUIRED_KEYS__:
+            if key not in self:
+                raise ValueError(f'{key} is required')
 
     @staticmethod
     def read(filename: str) -> 'Configuration':

@@ -1,4 +1,14 @@
-*~
 __pycache__
+*~
 pyservice
 pyservice
+specs/*.toolbox/**/*.tla
+specs/*.toolbox/**/MC.*
+specs/*.toolbox/*SnapShot*
+specs/**/*.aux
+specs/**/*.dot
+specs/**/*.log
+specs/**/*.out
+specs/**/*.pdf
+specs/**/*.svg
+specs/**/*.tex

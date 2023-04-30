@@ -4,26 +4,35 @@ EXTENDS TLC
 CONSTANTS   Emails,         \* Set of incoming Emails
             Completions     \* Set of completion responses
 
-VARIABLES   EmailMsgq,      \* Queue of incoming Emails
+VARIABLES   Archived,       \* Set of archived Emails
+            Arrived,        \* Queue of incoming Emails
             CompletionMsgq, \* Queue of completion responses
             Inbox,          \* Set of Emails in Inbox
-            Archived,       \* Set of archived Emails
-            Undeliverable,  \* Set of failed Emails
-            Outbox          \* Set of outgoing Emails
-vars == << Archived, CompletionMsgq, EmailMsgq, Inbox, Outbox, Undeliverable >>
+            Outbox,         \* Set of outgoing Emails
+            Parsed,         \* Set of parsed Emails
+            Undeliverable   \* Set of failed Emails
+vars == << Archived, CompletionMsgq, Arrived, Inbox, Outbox, Parsed, Undeliverable >>
 
-TypeOK ==   /\ EmailMsgq \subseteq Emails
+TypeOK ==   /\ Archived \subseteq Emails
+            /\ Arrived \subseteq Emails
             /\ CompletionMsgq \subseteq Completions
             /\ Inbox \subseteq Emails
-            /\ Archived \subseteq Emails
             /\ Outbox \subseteq Completions
+            /\ Parsed \subseteq Emails
+            /\ Undeliverable \subseteq Emails
+
+Invariants ==
+    (***********************************************************************)
+    (* We don't lose any e-mails.                                          *)
+    (***********************************************************************)
+    /\ Inbox \cup Arrived \cup Parsed \cup Undeliverable = Emails
 -----------------------------------------------------------------------------
 ReceiveEmailOK(email) ==
     (***********************************************************************)
-    (* Enqueues an Email from Inbox to EmailMsgq.                          *)
+    (* Enqueues an Email from Inbox to Arrived.                            *)
     (***********************************************************************)
-    /\ EmailMsgq' = EmailMsgq \cup {email}
-    /\ UNCHANGED << Archived, CompletionMsgq, Inbox, Outbox, Undeliverable >>
+    /\ Arrived' = Arrived \cup {email}
+    /\ UNCHANGED << Archived, CompletionMsgq, Inbox, Outbox, Parsed, Undeliverable >>
 
 ReceiveEmailError(email) ==
     (***********************************************************************)
@@ -32,9 +41,9 @@ ReceiveEmailError(email) ==
     (* Inbox after addressing the issue.                                   *)
     (***********************************************************************)
     /\ Undeliverable' = Undeliverable \cup {email}
-    /\ UNCHANGED << Archived, CompletionMsgq, EmailMsgq, Inbox, Outbox >>
+    /\ UNCHANGED << Archived, CompletionMsgq, Arrived, Inbox, Outbox, Parsed >>
 
-ReceiveEmail == /\ \E email \in Inbox \ (EmailMsgq \cup Undeliverable):
+ReceiveEmail == /\ \E email \in Inbox \ (Arrived \cup Parsed \cup Undeliverable):
                     \/ ReceiveEmailOK(email)
                     \/ ReceiveEmailError(email)
 -----------------------------------------------------------------------------
@@ -44,26 +53,64 @@ ArchiveEmail ==
     (* This is a low-priority operation and it does not block other        *)
     (* operations.                                                         *)
     (***********************************************************************)
-    \E email \in EmailMsgq \ Archived:
+    \E email \in (Arrived \cup Parsed) \ Archived:
         /\ Inbox' = Inbox \ {email}
         /\ Archived' = Archived \cup {email}
-        /\ UNCHANGED << CompletionMsgq, EmailMsgq, Outbox, Undeliverable >>
+        /\ UNCHANGED << CompletionMsgq, Arrived, Outbox, Parsed, Undeliverable >>
 -----------------------------------------------------------------------------
-Init == /\ EmailMsgq = {}
+ParseEmail1OK ==
+    (***********************************************************************)
+    (* The first step of parsing an e-mail response stores the parsed      *)
+    (* content in the queue.                                               *)
+    (***********************************************************************)
+    \E email \in Arrived \ (Parsed \cup Undeliverable):
+        /\ Parsed' = Parsed \cup {email}
+        /\ UNCHANGED << Archived, Arrived, CompletionMsgq, Inbox, Outbox, Undeliverable >>
+
+ParseEmail2OK ==
+    (***********************************************************************)
+    (* The second step of parsing removes the e-mail response from the     *)
+    (* queue only after the parsing is successful.  This ensures we don't  *)
+    (* lose any e-mails in case of a failure.                              *)
+    (***********************************************************************)
+    \E email \in (Arrived \cap Parsed) \ Undeliverable:
+        /\ Arrived' = Arrived \ {email}
+        /\ UNCHANGED << Archived, CompletionMsgq, Inbox, Outbox, Parsed, Undeliverable >>
+
+ParseEmailOK ==
+    (***********************************************************************)
+    (* Parses an email.  The sub-operations occur over distributed settings*)
+    (* and may fail.  Each sub-operation is atomic, and their order of     *)
+    (* execution is important.                                             *)
+    (***********************************************************************)
+    \/ ParseEmail1OK
+    \/ ParseEmail2OK
+
+ParseEmailError ==
+    (***********************************************************************)
+    (* Fails parsing an email.                                             *)
+    (***********************************************************************)
+    \E email \in Arrived \ (Parsed \cup Undeliverable):
+        /\ Undeliverable' = Undeliverable \cup {email}
+        /\ UNCHANGED << Archived, Arrived, CompletionMsgq, Inbox, Outbox, Parsed >>
+
+ParseEmail == ParseEmailOK \/ ParseEmailError
+-----------------------------------------------------------------------------
+Init == /\ Arrived = {}
         /\ CompletionMsgq = {}
-        /\ Inbox \in SUBSET(Emails) \ {{}}
+        /\ Inbox = Emails
         /\ Archived = {}
         /\ Outbox = {}
+        /\ Parsed = {}
         /\ Undeliverable = {}
 
 Next == \/ ReceiveEmail
         \/ ArchiveEmail
+        \/ ParseEmail
         \/ UNCHANGED vars
 
-EventuallyEmptyInbox == []<>(Inbox = {})
-
-Spec == Init /\ [][Next]_vars /\ EventuallyEmptyInbox
+Spec == Init /\ [][Next]_vars
 =============================================================================
 \* Modification History
-\* Last modified Sat Apr 29 22:27:37 KST 2023 by hcs
+\* Last modified Sun Apr 30 11:14:27 KST 2023 by hcs
 \* Created Fri Apr 28 13:04:37 KST 2023 by hcs

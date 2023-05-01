@@ -7,28 +7,33 @@ VARIABLES   Arrived,        \* Queue of incoming Emails
             Completed,      \* Queue of completion responses
             Outbox,         \* Set of outgoing Emails
             Parsed,         \* Set of parsed Emails
-            Undeliverable   \* Set of failed Emails
-vars == << Arrived, Completed, Outbox, Parsed, Undeliverable >>
-EmailsInQueue == Arrived \cup Completed \cup Parsed \cup Undeliverable
+            Abandoned       \* Set of failed Emails
+vars == << Abandoned, Arrived, Completed, Outbox, Parsed >>
+EmailsInQueue == Abandoned \cup Arrived \cup Completed \cup Parsed
 
-TypeOK ==   /\ Arrived \subseteq Emails
+TypeOK ==   /\ Abandoned \subseteq Emails
+            /\ Arrived \subseteq Emails
             /\ Completed \subseteq Emails
             /\ Outbox \subseteq Emails
             /\ Parsed \subseteq Emails
-            /\ Undeliverable \subseteq Emails
 
 Invariants ==
     (***********************************************************************)
     (* Don't parse e-mails more than once.                                 *)
     (***********************************************************************)
     /\ \A email \in Completed: email \notin Parsed => email \notin Arrived
+    (***********************************************************************)
+    (* Abandoned e-mails not to appear anywhere else, as Abandoned is a    *)
+    (* general queue state separate from e-mail processing state.          *)
+    (***********************************************************************)
+    /\ \A email \in Abandoned: email \notin Arrived \cup Completed \cup Parsed
 -----------------------------------------------------------------------------
 ReceiveEmailOK(email) ==
     (***********************************************************************)
     (* Enqueues an Email from Inbox to Arrived.                            *)
     (***********************************************************************)
     /\ Arrived' = Arrived \cup {email}
-    /\ UNCHANGED << Completed, Outbox, Parsed, Undeliverable >>
+    /\ UNCHANGED << Abandoned, Completed, Outbox, Parsed >>
 
 ReceiveEmailError(email) ==
     (***********************************************************************)
@@ -36,8 +41,8 @@ ReceiveEmailError(email) ==
     (* to RemoteArchived folder.  Support engineer can move the email back to    *)
     (* Inbox after addressing the issue.                                   *)
     (***********************************************************************)
-    /\ Undeliverable' = Undeliverable \cup {email}
-    /\ UNCHANGED << Completed, Arrived, Outbox, Parsed >>
+    /\ Abandoned' = Abandoned \cup {email}
+    /\ UNCHANGED << Arrived, Completed, Outbox, Parsed >>
 
 ReceiveEmail == /\ \E email \in Emails \ EmailsInQueue:
                     \/ ReceiveEmailOK(email)
@@ -50,7 +55,7 @@ ParseEmail1OK(email) ==
     (***********************************************************************)
     /\ email \notin Parsed
     /\ Parsed' = Parsed \cup {email}
-    /\ UNCHANGED << Arrived, Completed, Outbox, Undeliverable >>
+    /\ UNCHANGED << Abandoned, Arrived, Completed, Outbox >>
 
 ParseEmail2OK(email) ==
     (***********************************************************************)
@@ -60,7 +65,7 @@ ParseEmail2OK(email) ==
     (***********************************************************************)
     /\ email \in Parsed
     /\ Arrived' = Arrived \ {email}
-    /\ UNCHANGED << Completed, Outbox, Parsed, Undeliverable >>
+    /\ UNCHANGED << Abandoned, Completed, Outbox, Parsed >>
 
 ParseEmailOK(email) ==
     (***********************************************************************)
@@ -76,23 +81,24 @@ ParseEmail1Error(email) ==
     (* Fails parsing an email.                                             *)
     (***********************************************************************)
     /\ email \notin Parsed
-    /\ Undeliverable' = Undeliverable \cup {email}
-    /\ UNCHANGED << Arrived, Completed, Outbox, Parsed >>
+    /\ Abandoned' = Abandoned \cup {email}
+    /\ Arrived' = Arrived \ {email}
+    /\ UNCHANGED << Completed, Outbox, Parsed >>
 
 ParseEmail ==
-    \E email \in Arrived \ Undeliverable:
+    \E email \in Arrived \ Abandoned:
         \/ ParseEmailOK(email)
         \/ ParseEmail1Error(email)
 -----------------------------------------------------------------------------
 CompleteMessage1OK(email) ==
     /\ email \notin Completed
     /\ Completed' = Completed \cup {email}
-    /\ UNCHANGED << Arrived, Outbox, Parsed, Undeliverable >>
+    /\ UNCHANGED << Abandoned, Arrived, Outbox, Parsed >>
 
 CompleteMessage2OK(email) ==
     /\ email \in Completed
     /\ Parsed' = Parsed \ {email}
-    /\ UNCHANGED << Arrived, Completed, Outbox, Undeliverable >>
+    /\ UNCHANGED << Abandoned, Arrived, Completed, Outbox >>
 
 CompleteMessageOK(email) ==
     \/ CompleteMessage1OK(email)
@@ -100,24 +106,25 @@ CompleteMessageOK(email) ==
 
 CompleteMessage1Error(email) ==
     /\ email \notin Completed
-    /\ Undeliverable' = Undeliverable \cup {email}
-    /\ UNCHANGED << Arrived, Completed, Outbox, Parsed >>
+    /\ Abandoned' = Abandoned \cup {email}
+    /\ Parsed' = Parsed \ {email}
+    /\ UNCHANGED << Arrived, Completed, Outbox >>
 
 CompleteMessage ==
-    \E email \in Parsed \ (Arrived \cup Undeliverable):
+    \E email \in Parsed \ (Arrived \cup Abandoned):
         \/ CompleteMessageOK(email)
         \/ CompleteMessage1Error(email)
 -----------------------------------------------------------------------------
 AllEmailsCompletedOrUndeliverable ==
-    /\ Completed \cup Undeliverable = Emails
-    /\ Parsed \ Undeliverable = {}
+    /\ Completed \cup Abandoned = Emails
+    /\ Parsed \ Abandoned = {}
     /\ UNCHANGED vars
 
-Init == /\ Arrived = {}
+Init == /\ Abandoned = {}
+        /\ Arrived = {}
         /\ Completed = {}
         /\ Outbox = {}
         /\ Parsed = {}
-        /\ Undeliverable = {}
 
 Next == \/ ReceiveEmail
         \/ ParseEmail
@@ -126,7 +133,7 @@ Next == \/ ReceiveEmail
 
 Spec == Init /\ [][Next]_vars
 
-EventuallyCompletedOrUndeliverable == <>[](Completed \cup Undeliverable = Emails)
+EventuallyCompletedOrUndeliverable == <>[](Completed \cup Abandoned = Emails)
 =============================================================================
 \* Modification History
 \* Last modified Mon May 01 14:13:08 KST 2023 by hcs

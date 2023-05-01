@@ -3,28 +3,28 @@ EXTENDS TLC
 
 CONSTANTS   Emails          \* Set of incoming Emails
 
-VARIABLES   Archived,       \* Set of archived Emails
-            Arrived,        \* Queue of incoming Emails
+VARIABLES   Arrived,        \* Queue of incoming Emails
             Completed,      \* Queue of completion responses
-            Inbox,          \* Set of Emails in Inbox
             Outbox,         \* Set of outgoing Emails
             Parsed,         \* Set of parsed Emails
+            RemoteArchived, \* Set of archived Emails
+            RemoteInbox,    \* Set of Emails in Inbox
             Undeliverable   \* Set of failed Emails
-vars == << Archived, Completed, Arrived, Inbox, Outbox, Parsed, Undeliverable >>
+vars == << Completed, Arrived, Outbox, Parsed, RemoteArchived, RemoteInbox, Undeliverable >>
 
-TypeOK ==   /\ Archived \subseteq Emails
-            /\ Arrived \subseteq Emails
+TypeOK ==   /\ Arrived \subseteq Emails
             /\ Completed \subseteq Emails
-            /\ Inbox \subseteq Emails
             /\ Outbox \subseteq Emails
             /\ Parsed \subseteq Emails
+            /\ RemoteArchived \subseteq Emails
+            /\ RemoteInbox \subseteq Emails
             /\ Undeliverable \subseteq Emails
 
 Invariants ==
     (***********************************************************************)
     (* We don't lose any e-mails.                                          *)
     (***********************************************************************)
-    /\ Inbox \cup Arrived \cup Completed \cup Parsed \cup Undeliverable = Emails
+    /\ RemoteInbox \cup Arrived \cup Completed \cup Parsed \cup Undeliverable = Emails
     (***********************************************************************)
     (* Don't parse e-mails more than once.                                 *)
     (***********************************************************************)
@@ -35,30 +35,30 @@ ReceiveEmailOK(email) ==
     (* Enqueues an Email from Inbox to Arrived.                            *)
     (***********************************************************************)
     /\ Arrived' = Arrived \cup {email}
-    /\ UNCHANGED << Archived, Completed, Inbox, Outbox, Parsed, Undeliverable >>
+    /\ UNCHANGED << Completed, Outbox, Parsed, RemoteArchived, RemoteInbox, Undeliverable >>
 
 ReceiveEmailError(email) ==
     (***********************************************************************)
     (* Fails reading an email from Inbox.  Logs it, marks it and moves it  *)
-    (* to Archived folder.  Support engineer can move the email back to    *)
+    (* to RemoteArchived folder.  Support engineer can move the email back to    *)
     (* Inbox after addressing the issue.                                   *)
     (***********************************************************************)
     /\ Undeliverable' = Undeliverable \cup {email}
-    /\ UNCHANGED << Archived, Completed, Arrived, Inbox, Outbox, Parsed >>
+    /\ UNCHANGED << Completed, Arrived, Outbox, Parsed, RemoteArchived, RemoteInbox >>
 
-ReceiveEmail == /\ \E email \in Inbox \ (Arrived \cup Completed \cup Parsed \cup Undeliverable):
+ReceiveEmail == /\ \E email \in RemoteInbox \ (Arrived \cup Completed \cup Parsed \cup Undeliverable):
                     \/ ReceiveEmailOK(email)
                     \/ ReceiveEmailError(email)
 -----------------------------------------------------------------------------
 ArchiveEmail ==
     (***********************************************************************)
-    (* When enqueuing an email is successful, move it to Archived folder.  *)
+    (* When enqueuing an email is successful, move it to RemoteArchived folder.  *)
     (* This is a low-priority operation and it does not block other        *)
     (* operations.                                                         *)
     (***********************************************************************)
-    \E email \in (Arrived \cup Completed \cup Parsed) \ Archived:
-        /\ Inbox' = Inbox \ {email}
-        /\ Archived' = Archived \cup {email}
+    \E email \in (Arrived \cup Completed \cup Parsed) \ RemoteArchived:
+        /\ RemoteInbox' = RemoteInbox \ {email}
+        /\ RemoteArchived' = RemoteArchived \cup {email}
         /\ UNCHANGED << Completed, Arrived, Outbox, Parsed, Undeliverable >>
 -----------------------------------------------------------------------------
 ParseEmail1OK ==
@@ -68,7 +68,7 @@ ParseEmail1OK ==
     (***********************************************************************)
     \E email \in Arrived \ (Parsed \cup Undeliverable):
         /\ Parsed' = Parsed \cup {email}
-        /\ UNCHANGED << Archived, Arrived, Completed, Inbox, Outbox, Undeliverable >>
+        /\ UNCHANGED << Arrived, Completed, RemoteArchived, RemoteInbox, Outbox, Undeliverable >>
 
 ParseEmail2OK ==
     (***********************************************************************)
@@ -78,7 +78,7 @@ ParseEmail2OK ==
     (***********************************************************************)
     \E email \in (Arrived \cap Parsed) \ Undeliverable:
         /\ Arrived' = Arrived \ {email}
-        /\ UNCHANGED << Archived, Completed, Inbox, Outbox, Parsed, Undeliverable >>
+        /\ UNCHANGED << Completed, RemoteInbox, Outbox, Parsed, RemoteArchived, Undeliverable >>
 
 ParseEmailOK ==
     (***********************************************************************)
@@ -95,19 +95,19 @@ ParseEmailError ==
     (***********************************************************************)
     \E email \in Arrived \ (Parsed \cup Undeliverable):
         /\ Undeliverable' = Undeliverable \cup {email}
-        /\ UNCHANGED << Archived, Arrived, Completed, Inbox, Outbox, Parsed >>
+        /\ UNCHANGED << Arrived, Completed, Outbox, Parsed, RemoteArchived, RemoteInbox >>
 
 ParseEmail == ParseEmailOK \/ ParseEmailError
 -----------------------------------------------------------------------------
 CompleteMessage1OK ==
     \E email \in Parsed \ (Arrived \cup Completed \cup Undeliverable):
         /\ Completed' = Completed \cup {email}
-        /\ UNCHANGED << Archived, Arrived, Inbox, Outbox, Parsed, Undeliverable >>
+        /\ UNCHANGED << Arrived, Outbox, Parsed, RemoteArchived, RemoteInbox, Undeliverable >>
 
 CompleteMessage2OK ==
     \E email \in (Parsed \cap Completed) \ Undeliverable:
         /\ Parsed' = Parsed \ {email}
-        /\ UNCHANGED << Archived, Arrived, Completed, Inbox, Outbox, Undeliverable >>
+        /\ UNCHANGED << Arrived, Completed, Outbox, RemoteArchived, RemoteInbox, Undeliverable >>
 
 CompleteMessageOK ==
     \/ CompleteMessage1OK
@@ -116,7 +116,7 @@ CompleteMessageOK ==
 CompleteMessageError ==
     \E email \in Parsed \ (Completed \cup Undeliverable):
         /\ Undeliverable' = Undeliverable \cup {email}
-        /\ UNCHANGED << Archived, Arrived, Completed, Inbox, Outbox, Parsed >>
+        /\ UNCHANGED << Arrived, Completed, Outbox, Parsed, RemoteArchived, RemoteInbox >>
 
 CompleteMessage == CompleteMessageOK \/ CompleteMessageError
 -----------------------------------------------------------------------------
@@ -127,10 +127,10 @@ AllEmailsCompletedOrUndeliverable ==
 
 Init == /\ Arrived = {}
         /\ Completed = {}
-        /\ Inbox = Emails
-        /\ Archived = {}
         /\ Outbox = {}
         /\ Parsed = {}
+        /\ RemoteInbox = Emails
+        /\ RemoteArchived = {}
         /\ Undeliverable = {}
 
 Next == \/ ReceiveEmail

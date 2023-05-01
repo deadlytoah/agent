@@ -11,7 +11,7 @@
     <stringAttribute key="modelBehaviorNext" value="Next"/>
     <stringAttribute key="modelBehaviorSpec" value="Spec"/>
     <intAttribute key="modelBehaviorSpecType" value="1"/>
-    <stringAttribute key="modelBehaviorVars" value="Archived, Completed, Arrived, Parsed, Undeliverable, Outbox, Inbox"/>
+    <stringAttribute key="modelBehaviorVars" value="Completed, Arrived, RemoteArchived, Parsed, Undeliverable, Outbox, RemoteInbox"/>
     <stringAttribute key="modelComments" value=""/>
     <booleanAttribute key="modelCorrectnessCheckDeadlock" value="true"/>
     <listAttribute key="modelCorrectnessInvariants">

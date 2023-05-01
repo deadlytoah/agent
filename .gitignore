@@ -12,3 +12,4 @@ specs/**/*.out
 specs/**/*.pdf
 specs/**/*.svg
 specs/**/*.tex
+specs/states

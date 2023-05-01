@@ -131,11 +131,11 @@ Next == \/ ReceiveEmail
         \/ CompleteMessage
         \/ AllEmailsCompletedOrUndeliverable
 
-Spec == Init /\ [][Next]_vars
+Spec == Init /\ [][Next]_vars /\ WF_vars(Next)
 -----------------------------------------------------------------------------
 THEOREM Spec => []TypeOK
 THEOREM Spec => []Invariants
 =============================================================================
 \* Modification History
-\* Last modified Mon May 01 18:46:27 KST 2023 by hcs
+\* Last modified Mon May 01 23:22:00 KST 2023 by hcs
 \* Created Fri Apr 28 13:04:37 KST 2023 by hcs

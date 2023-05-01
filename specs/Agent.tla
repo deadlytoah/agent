@@ -132,9 +132,10 @@ Next == \/ ReceiveEmail
         \/ AllEmailsCompletedOrUndeliverable
 
 Spec == Init /\ [][Next]_vars
-
-EventuallyCompletedOrUndeliverable == <>[](Completed \cup Abandoned = Emails)
+-----------------------------------------------------------------------------
+THEOREM Spec => []TypeOK
+THEOREM Spec => []Invariants
 =============================================================================
 \* Modification History
-\* Last modified Mon May 01 14:13:08 KST 2023 by hcs
+\* Last modified Mon May 01 18:46:27 KST 2023 by hcs
 \* Created Fri Apr 28 13:04:37 KST 2023 by hcs

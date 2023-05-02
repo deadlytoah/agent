@@ -9,7 +9,6 @@ specs/**/*.aux
 specs/**/*.dot
 specs/**/*.log
 specs/**/*.out
-specs/**/*.pdf
-specs/**/*.svg
 specs/**/*.tex
+specs/*/*.pdf
 specs/states

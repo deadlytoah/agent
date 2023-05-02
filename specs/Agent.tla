@@ -133,9 +133,20 @@ Next == \/ ReceiveEmail
 
 Spec == Init /\ [][Next]_vars /\ WF_vars(Next)
 -----------------------------------------------------------------------------
+(*****************************************************************************)
+(* Temporal properties for verification                                      *)
+(*****************************************************************************)
+NoLostEmails ==
+    (*************************************************************************)
+    (* No e-mails should be lost.  This is a safety property.                *)
+    (*************************************************************************)
+    \A email \in Emails:
+        [] (email \in EmailsInQueue => <>[] (email \in Abandoned \cup Completed))
+-----------------------------------------------------------------------------
 THEOREM Spec => []TypeOK
 THEOREM Spec => []Invariants
+THEOREM Spec => NoLostEmails
 =============================================================================
 \* Modification History
-\* Last modified Mon May 01 23:22:00 KST 2023 by hcs
+\* Last modified Tue May 02 11:52:01 KST 2023 by hcs
 \* Created Fri Apr 28 13:04:37 KST 2023 by hcs

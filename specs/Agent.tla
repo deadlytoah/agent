@@ -3,14 +3,13 @@ EXTENDS FiniteSets, Naturals, Sequences, TLC
 
 CONSTANTS   Emails          \* Set of incoming Emails
 
-VARIABLES   Archived,
+VARIABLES   Archived,       \* Set of archived Emails
             Arrived,        \* Queue of incoming Emails
             Completed,      \* Queue of completion responses
             RemoteOutbox,   \* Set of outgoing Emails
             Parsed,         \* Set of parsed Emails
-            Sending,
             Abandoned       \* Set of failed Emails
-vars == << Abandoned, Archived, Arrived, Completed, Parsed, RemoteOutbox, Sending >>
+vars == << Abandoned, Archived, Arrived, Completed, Parsed, RemoteOutbox >>
 EmailsInQueue == Abandoned \cup Archived \cup Arrived \cup Completed \cup Parsed
 
 TypeOK ==   /\ Abandoned \subseteq Emails
@@ -19,31 +18,38 @@ TypeOK ==   /\ Abandoned \subseteq Emails
             /\ Completed \subseteq Emails
             /\ Parsed \subseteq Emails
             /\ RemoteOutbox \in Seq(Emails)
-            /\ Sending \subseteq Emails
 
 Range(S) == { S[n] : n \in DOMAIN S }
 
 Invariants ==
+    /\ \A email \in Completed: email \notin Parsed => email \notin Arrived
     (***********************************************************************)
     (* Don't parse e-mails more than once.                                 *)
     (***********************************************************************)
-    /\ \A email \in Completed: email \notin Parsed => email \notin Arrived
+    /\ \A email \in Range(RemoteOutbox): email \notin Completed => email \notin Parsed
+    (***********************************************************************)
+    (* Don't complete e-mails more than once.                              *)
+    (***********************************************************************)
+    /\ \A email \in Abandoned: email \notin Arrived \cup Completed \cup Parsed
     (***********************************************************************)
     (* Abandoned e-mails not to appear anywhere else, as Abandoned is a    *)
     (* general queue state separate from e-mail processing state.          *)
     (***********************************************************************)
-    /\ \A email \in Abandoned: email \notin Arrived \cup Completed \cup Parsed
+    /\ \A email \in Archived: email \notin Arrived \cup Completed \cup Parsed
+    (***********************************************************************)
+    (* Same with archived emails.                                          *)
+    (***********************************************************************)
+    /\ Len(RemoteOutbox) = Cardinality(Range(RemoteOutbox))
     (***********************************************************************)
     (* Don't send e-mails more than once.                                  *)
     (***********************************************************************)
-    /\ Len(RemoteOutbox) = Cardinality(Range(RemoteOutbox))
 -----------------------------------------------------------------------------
 ReceiveEmailOK(email) ==
     (***********************************************************************)
     (* Enqueues an Email from Inbox to Arrived.                            *)
     (***********************************************************************)
     /\ Arrived' = Arrived \cup {email}
-    /\ UNCHANGED << Abandoned, Archived, Completed, Parsed, RemoteOutbox, Sending >>
+    /\ UNCHANGED << Abandoned, Archived, Completed, Parsed, RemoteOutbox >>
 
 ReceiveEmailError(email) ==
     (***********************************************************************)
@@ -52,7 +58,7 @@ ReceiveEmailError(email) ==
     (* Inbox after addressing the issue.                                   *)
     (***********************************************************************)
     /\ Abandoned' = Abandoned \cup {email}
-    /\ UNCHANGED << Archived, Arrived, Completed, Parsed, RemoteOutbox, Sending >>
+    /\ UNCHANGED << Archived, Arrived, Completed, Parsed, RemoteOutbox >>
 
 ReceiveEmail == /\ \E email \in Emails \ EmailsInQueue:
                     \/ ReceiveEmailOK(email)
@@ -65,7 +71,7 @@ ParseEmail1OK(email) ==
     (***********************************************************************)
     /\ email \notin Parsed
     /\ Parsed' = Parsed \cup {email}
-    /\ UNCHANGED << Abandoned, Archived, Arrived, Completed, RemoteOutbox, Sending >>
+    /\ UNCHANGED << Abandoned, Archived, Arrived, Completed, RemoteOutbox >>
 
 ParseEmail2OK(email) ==
     (***********************************************************************)
@@ -75,7 +81,7 @@ ParseEmail2OK(email) ==
     (***********************************************************************)
     /\ email \in Parsed
     /\ Arrived' = Arrived \ {email}
-    /\ UNCHANGED << Abandoned, Archived, Completed, Parsed, RemoteOutbox, Sending >>
+    /\ UNCHANGED << Abandoned, Archived, Completed, Parsed, RemoteOutbox >>
 
 ParseEmailOK(email) ==
     (***********************************************************************)
@@ -93,7 +99,7 @@ ParseEmail1Error(email) ==
     /\ email \notin Parsed
     /\ Abandoned' = Abandoned \cup {email}
     /\ Arrived' = Arrived \ {email}
-    /\ UNCHANGED << Archived, Completed, Parsed, RemoteOutbox, Sending >>
+    /\ UNCHANGED << Archived, Completed, Parsed, RemoteOutbox >>
 
 ParseEmail ==
     \E email \in Arrived \ Abandoned:
@@ -103,12 +109,12 @@ ParseEmail ==
 CompleteMessage1OK(email) ==
     /\ email \notin Completed
     /\ Completed' = Completed \cup {email}
-    /\ UNCHANGED << Abandoned, Archived, Arrived, Parsed, RemoteOutbox, Sending >>
+    /\ UNCHANGED << Abandoned, Archived, Arrived, Parsed, RemoteOutbox >>
 
 CompleteMessage2OK(email) ==
     /\ email \in Completed
     /\ Parsed' = Parsed \ {email}
-    /\ UNCHANGED << Abandoned, Archived, Arrived, Completed, RemoteOutbox, Sending >>
+    /\ UNCHANGED << Abandoned, Archived, Arrived, Completed, RemoteOutbox >>
 
 CompleteMessageOK(email) ==
     \/ CompleteMessage1OK(email)
@@ -118,45 +124,44 @@ CompleteMessage1Error(email) ==
     /\ email \notin Completed
     /\ Abandoned' = Abandoned \cup {email}
     /\ Parsed' = Parsed \ {email}
-    /\ UNCHANGED << Archived, Arrived, Completed, RemoteOutbox, Sending >>
+    /\ UNCHANGED << Archived, Arrived, Completed, RemoteOutbox >>
 
 CompleteMessage ==
     \E email \in Parsed \ (Arrived \cup Abandoned):
         \/ CompleteMessageOK(email)
         \/ CompleteMessage1Error(email)
 -----------------------------------------------------------------------------
-SendOutCompletion1OK ==
+SendOutCompletion1OK(email) ==
     (***********************************************************************)
     (* Sends out a completion response e-mail.                             *)
     (***********************************************************************)
-    \E email \in Completed \ (Abandoned \cup Parsed):
-        /\ email \notin Sending
-        /\ Sending' = {email}
-        /\ RemoteOutbox' = Append(RemoteOutbox, email)
-        /\ UNCHANGED << Abandoned, Archived, Arrived, Completed, Parsed >>
+    /\ email \notin Range(RemoteOutbox)     \* We haven't already sent this e-mail
+    /\ RemoteOutbox' = Append(RemoteOutbox, email)
+    /\ UNCHANGED << Abandoned, Archived, Arrived, Completed, Parsed >>
 
-SendOutCompletion2OK ==
+SendOutCompletion2OK(email) ==
     (***********************************************************************)
     (* Marks an email as sent.                                             *)
     (***********************************************************************)
-    /\ Sending # {}
-    /\ Sending' = {}
-    /\ Completed' = Completed \ Sending
-    /\ Archived' = Archived \cup Sending
+    /\ email \in Range(RemoteOutbox)    \* Previous step to send this e-mail succeeded.
+    /\ Archived' = Archived \cup {email}
+    /\ Completed' = Completed \ {email}
     /\ UNCHANGED << Abandoned, Arrived, Parsed, RemoteOutbox >>
 
-SendOutCompletion2Error ==
+SendOutCompletion1Error(email) ==
     (***********************************************************************)
-    (* Fails marking an email as sent.                                     *)
+    (* Fails sending the e-mail.                                           *)
     (***********************************************************************)
-    /\ Sending # {}
-    /\ Sending' = {}
-    /\ UNCHANGED << Abandoned, Archived, Arrived, Completed, Parsed, RemoteOutbox >>
+    /\ email \notin Range(RemoteOutbox)     \* We haven't already sent this e-mail
+    /\ Abandoned' = Abandoned \cup {email}
+    /\ Completed' = Completed \ {email}
+    /\ UNCHANGED << Archived, Arrived, Parsed, RemoteOutbox >>
 
 SendOutCompletion ==
-    \/ SendOutCompletion1OK
-    \/ SendOutCompletion2OK
-    \/ SendOutCompletion2Error
+    \E email \in Completed \ (Abandoned \cup Parsed):
+        \/ SendOutCompletion1OK(email)
+        \/ SendOutCompletion2OK(email)
+        \/ SendOutCompletion1Error(email)
 -----------------------------------------------------------------------------
 AllDone ==
     (***********************************************************************)
@@ -172,7 +177,6 @@ Init == /\ Abandoned = {}
         /\ Completed = {}
         /\ Parsed = {}
         /\ RemoteOutbox = <<>>
-        /\ Sending = {}
 
 Next == \/ ReceiveEmail
         \/ ParseEmail
@@ -185,17 +189,18 @@ Spec == Init /\ [][Next]_vars /\ WF_vars(Next)
 (*****************************************************************************)
 (* Temporal properties for verification                                      *)
 (*****************************************************************************)
+
 NoLostEmails ==
     (*************************************************************************)
     (* No e-mails should be lost.  This is a safety property.                *)
     (*************************************************************************)
     \A email \in Emails:
-        [] (email \in EmailsInQueue => <>[] (email \in Abandoned \cup Archived))
+        [] (email \in EmailsInQueue => <>[] (email \in Abandoned \cup Range(RemoteOutbox)))
 -----------------------------------------------------------------------------
 THEOREM Spec => []TypeOK
 THEOREM Spec => []Invariants
 THEOREM Spec => NoLostEmails
 =============================================================================
 \* Modification History
-\* Last modified Tue May 02 16:13:11 KST 2023 by hcs
+\* Last modified Wed May 03 16:27:57 KST 2023 by hcs
 \* Created Fri Apr 28 13:04:37 KST 2023 by hcs

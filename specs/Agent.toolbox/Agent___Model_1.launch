@@ -5,13 +5,13 @@
     <stringAttribute key="distributedNetworkInterface" value="192.168.0.19"/>
     <intAttribute key="distributedNodesCount" value="1"/>
     <stringAttribute key="distributedTLC" value="off"/>
-    <intAttribute key="fpIndex" value="126"/>
+    <intAttribute key="fpIndex" value="70"/>
     <intAttribute key="maxHeapSize" value="25"/>
     <stringAttribute key="modelBehaviorInit" value="Init"/>
     <stringAttribute key="modelBehaviorNext" value="Next"/>
     <stringAttribute key="modelBehaviorSpec" value="Spec"/>
     <intAttribute key="modelBehaviorSpecType" value="1"/>
-    <stringAttribute key="modelBehaviorVars" value="Completed, Arrived, Abandoned, Parsed, Outbox"/>
+    <stringAttribute key="modelBehaviorVars" value="Archived, Completed, Arrived, RemoteOutbox, Abandoned, Parsed"/>
     <stringAttribute key="modelComments" value=""/>
     <booleanAttribute key="modelCorrectnessCheckDeadlock" value="true"/>
     <listAttribute key="modelCorrectnessInvariants">

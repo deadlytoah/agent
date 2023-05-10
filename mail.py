@@ -1,8 +1,8 @@
 import asyncio
-import json
 from typing import AsyncIterator
 
-from proxy import mail, msgq
+from controller.msgq.email import EmailMsgqController
+from proxy import mail
 
 
 class Poller:
@@ -46,10 +46,10 @@ class Enqueuer:
     :type msgq_service: msgq.Service
     """
 
-    def __init__(self, poller: Poller, mail_service: mail.Service, msgq_service: msgq.Service) -> None:
-        self.poller = poller
+    def __init__(self, poller: Poller, mail_service: mail.Service, email_msgq_controller: EmailMsgqController) -> None:
+        self.email_msgq_controller = email_msgq_controller
         self.mail_service = mail_service
-        self.msgq_service = msgq_service
+        self.poller = poller
 
     async def loop(self) -> None:
         """
@@ -58,7 +58,8 @@ class Enqueuer:
         enqueuing it.
         """
         async for thread in self.poller.poll():
-            await self.msgq_service.push(json.dumps(thread.to_dictionary()))
+            if not await self.email_msgq_controller.is_queued(thread):
+                await self.email_msgq_controller.push(thread)
 
             # Without archiving the thread, we will get the same thread again
             # the next time we poll.

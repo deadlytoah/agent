@@ -1,5 +1,9 @@
+import hashlib
+import json
+from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 from pyservice import ServiceException, client
 
@@ -33,6 +37,100 @@ class StateException(ServiceException):
 
     def __init__(self, message: str):
         super(StateException, self).__init__(MsgqErrorCode.MSGQ_STATE, message)
+
+
+class VerificationError(Exception):
+    """
+    Indicates a message failed verification.
+    """
+
+    def __init__(self, csid: str):
+        super(VerificationError, self).__init__(
+            f'Verification failed for message with ID {csid}')
+        self.csid = csid
+
+
+class Status(Enum):
+    """
+    Represents the status of a message in the queue.
+    """
+    QUEUED = 1
+    PROCESSING = 2
+    ARCHIVED = 3
+    ABANDONED = 4
+    CANCELLED = 5
+
+
+@dataclass
+class Message:
+    """
+    Represents a message in the queue.
+
+    :param csid: The checksum ID of the message.
+    :type csid: ChecksumID
+    :param payload: The message payload.
+    :type payload: bytes
+    :param status: The status of the message.
+    :type status: Status
+    :param when_pushed: The date/time the message was pushed onto the queue.
+    :type when_pushed: datetime
+    :param when_deleted: The date/time the message was deleted from the queue.
+    :type when_deleted: datetime
+    :param when_delivered: The date/time the message was delivered.
+    :type when_delivered: datetime
+    :param when_error: The date/time the message encountered an error.
+    :type when_error: datetime
+    :param num_attempts: The number of times the message has been attempted.
+    :type num_attempts: int
+    :param last_error: The last error that occurred.
+    :type last_error: str
+    """
+
+    csid: str
+    payload: bytes
+    status: Status
+    when_pushed: datetime
+    when_deleted: Optional[datetime]
+    when_delivered: Optional[datetime]
+    when_error: Optional[datetime]
+    num_attempts: int
+    last_error: Optional[str]
+
+    @staticmethod
+    def from_dictionary(dictionary: dict[str, Any]) -> 'Message':
+        """
+        Creates a message from a dictionary.
+
+        :param dictionary: The dictionary to create the message from.
+        :type dictionary: dict
+        :return: The created message.
+        :rtype: Message
+        """
+        return Message(
+            csid=dictionary['csid'],
+            payload=bytes.fromhex(dictionary['payload']),
+            status=Status[dictionary['status']],
+            when_pushed=datetime.fromisoformat(dictionary['when_pushed']),
+            when_deleted=(datetime.fromisoformat(dictionary['when_deleted'])
+                          if dictionary['when_deleted'] is not None else None),
+            when_delivered=(datetime.fromisoformat(dictionary['when_delivered'])
+                            if dictionary['when_delivered'] is not None else None),
+            when_error=(datetime.fromisoformat(dictionary['when_error'])
+                        if dictionary['when_error'] is not None else None),
+            num_attempts=dictionary['num_attempts'],
+            last_error=dictionary['last_error']
+        )
+
+    def verify(self) -> None:
+        """
+        Verifies the message.
+
+        :return: None
+        :rtype: None
+        :raises VerificationError: The message failed verification.
+        """
+        if hashlib.sha512(self.payload, usedforsecurity=False).hexdigest() != self.csid:
+            raise VerificationError(self.csid)
 
 
 class Service:
@@ -152,3 +250,15 @@ class Service:
                 raise StateException(e.args[0]) from e
             else:
                 raise
+
+    async def find_by_status(self, status: list[Status]) -> list[Message]:
+        """
+        Finds all messages with the given status.
+
+        :param status: The status of the messages to find.
+        :type status: [Status]
+        :return: The messages with the given status.
+        :rtype: list[Message]
+        """
+        response = await client.call(self.endpoint, 'find_by_status', [s.name for s in status])
+        return [Message.from_dictionary(json.loads(message)) for message in response]

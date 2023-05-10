@@ -1,9 +1,8 @@
 import asyncio
-from sys import stderr
-from typing import List
 
 import mail
 from configuration import Configuration
+from controller.msgq.email import EmailMsgqController
 from proxy import gpt
 from proxy import mail as mail_proxy
 from proxy import msgq
@@ -23,7 +22,7 @@ async def main(configuration: Configuration) -> None:
     email_polling_interval = configuration['email_polling_interval']
     email_poller = mail.Poller(mail_service, interval=email_polling_interval)
     email_enqueuer = mail.Enqueuer(
-        email_poller, mail_service, mail_msgq_service)
+        email_poller, mail_service, EmailMsgqController(mail_msgq_service))
 
     async with asyncio.TaskGroup() as task_group:
         task_group.create_task(email_enqueuer.loop())

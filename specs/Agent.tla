@@ -1,4 +1,23 @@
 ------------------------------- MODULE Agent -------------------------------
+(**************************************************************************)
+(* Reliable Interface to GPT via Gmail                                    *)
+(*                                                                        *)
+(* Copyright (C) 2023  Hee Shin                                           *)
+(*                                                                        *)
+(* This program is free software: you can redistribute it and/or modify   *)
+(* it under the terms of the GNU General Public License as published by   *)
+(* the Free Software Foundation, either version 3 of the License, or      *)
+(* (at your option) any later version.                                    *)
+(*                                                                        *)
+(* This program is distributed in the hope that it will be useful,        *)
+(* but WITHOUT ANY WARRANTY; without even the implied warranty of         *)
+(* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the          *)
+(* GNU General Public License for more details.                           *)
+(*                                                                        *)
+(* You should have received a copy of the GNU General Public License      *)
+(* along with this program.  If not, see <https://www.gnu.org/licenses/>. *)
+(**************************************************************************)
+
 EXTENDS FiniteSets, Naturals, Sequences, TLC
 
 CONSTANTS   Emails          \* Set of incoming Emails
@@ -202,5 +221,5 @@ THEOREM Spec => []Invariants
 THEOREM Spec => NoLostEmails
 =============================================================================
 \* Modification History
-\* Last modified Wed May 03 16:27:57 KST 2023 by hcs
+\* Last modified Wed May 10 14:00:01 KST 2023 by hcs
 \* Created Fri Apr 28 13:04:37 KST 2023 by hcs

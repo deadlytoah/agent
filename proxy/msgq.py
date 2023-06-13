@@ -126,7 +126,7 @@ class Message:
         """
         return Message(
             csid=dictionary['csid'],
-            payload=bytes.fromhex(dictionary['payload']),
+            payload=dictionary['payload'].encode('utf-8'),
             status=Status[dictionary['status']],
             when_pushed=datetime.fromisoformat(dictionary['when_pushed']),
             when_deleted=(datetime.fromisoformat(dictionary['when_deleted'])
@@ -147,7 +147,7 @@ class Message:
         :rtype: None
         :raises VerificationError: The message failed verification.
         """
-        if hashlib.sha512(self.payload, usedforsecurity=False).hexdigest() != self.csid:
+        if hashlib.sha256(self.payload, usedforsecurity=False).hexdigest() != self.csid:
             raise VerificationError(self.csid)
 
 
@@ -209,20 +209,22 @@ class Service:
             else:
                 raise
 
-    async def fail(self, message_id: str) -> None:
+    async def fail(self, id: str, reason: str) -> None:
         """
-        Fails the message with the given ID.  The message must be in the
-        PROCESSING state.
+        Fails the message with the ID for the specified reason.  The message
+        must be in the PROCESSING state.
 
-        :param message_id: The ID of the message to fail.
-        :type message_id: str
+        :param id: The ID of the message to fail.
+        :type id: str
+        :param reason: The reason for the failure.
+        :type reason: str
         :return: None
         :rtype: None
         :raises StateException: The message is not in the queue or not in
                                 the PROCESSING status.
         """
         try:
-            await client.call(self.endpoint, 'fail', [message_id])
+            await client.call(self.endpoint, 'fail', [id, reason])
         except ServiceException as e:
             if e.error_code == MsgqErrorCode.MSGQ_STATE:
                 raise StateException(e.args[0]) from e
@@ -249,20 +251,22 @@ class Service:
             else:
                 raise
 
-    async def abandon(self, message_id: str) -> None:
+    async def abandon(self, message_id: str, reason: str) -> None:
         """
         Abandons the message with the given ID.  The message must be in the
         PROCESSING state.
 
         :param message_id: The ID of the message to abandon.
         :type message_id: str
+        :param reason: The reason for the abandonment.
+        :type reason: str
         :return: None
         :rtype: None
         :raises StateException: The message is not in the queue or not in
                                 the PROCESSING status.
         """
         try:
-            await client.call(self.endpoint, 'abandon', [message_id])
+            await client.call(self.endpoint, 'abandon', [message_id, reason])
         except ServiceException as e:
             if e.error_code == MsgqErrorCode.MSGQ_STATE:
                 raise StateException(e.args[0]) from e
@@ -280,3 +284,7 @@ class Service:
         """
         response = await client.call(self.endpoint, 'find_by_status', [s.name for s in status])
         return [Message.from_dictionary(json.loads(message)) for message in response]
+
+    async def find(self, message_id: str) -> Optional[Message]:
+        response = await client.call(self.endpoint, 'find', [message_id])
+        return Message.from_dictionary(json.loads(response[0])) if len(response) > 0 else None

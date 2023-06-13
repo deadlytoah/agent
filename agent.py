@@ -17,33 +17,46 @@
 #
 
 import asyncio
+from asyncio import Queue
 
 import mail
 from configuration import Configuration
-from controller.msgq.email import EmailMsgqController
-from proxy import gpt
+from controller.email import EmailController
+from controller.msgq import EmailMsgqController
+from mail import AGENT_EMAIL_ADDRESS, EmailHandler
 from proxy import mail as mail_proxy
 from proxy import msgq
+from proxy.gpt import GptService
 
-AGENT_EMAIL_ADDRESS = 'thevoicekorea+chat@gmail.com'
+# The maximum size of channel before an equeue operation blocks.
+MAXIMUM_CHANNEL_SIZE = 128
+
+
+def __create_email_controller() -> EmailController:
+    mail_service = mail_proxy.Service(
+        configuration['email_service_endpoint'], AGENT_EMAIL_ADDRESS)
+    return EmailController(mail_service)
 
 
 async def main(configuration: Configuration) -> None:
-    mail_service = mail_proxy.Service(
-        configuration['email_service_endpoint'], AGENT_EMAIL_ADDRESS)
     mail_msgq_service = msgq.Service(
         configuration['email_queue_service_endpoint'])
-    gpt_service = gpt.Service(configuration['gpt_service_endpoint'])
-    gpt_msgq_service = msgq.Service(
-        configuration['gpt_queue_service_endpoint'])
+    gpt_service = GptService(configuration['gpt_service_endpoint'])
 
-    email_polling_interval = configuration['email_polling_interval']
-    email_poller = mail.Poller(mail_service, interval=email_polling_interval)
+    email_msgq_sync: Queue[None] = Queue(MAXIMUM_CHANNEL_SIZE)
+
+    email_polling_interval: int = configuration['email_polling_interval']
+    email_poller = mail.Poller(
+        __create_email_controller(), interval=email_polling_interval)
+    email_msgq_controller = EmailMsgqController(mail_msgq_service)
     email_enqueuer = mail.Enqueuer(
-        email_poller, mail_service, EmailMsgqController(mail_msgq_service))
+        email_msgq_sync, email_poller, __create_email_controller(), email_msgq_controller)
+    email_handler = EmailHandler(email_msgq_sync, email_msgq_controller,
+                                 gpt_service, __create_email_controller())
 
     async with asyncio.TaskGroup() as task_group:
         task_group.create_task(email_enqueuer.loop())
+        task_group.create_task(email_handler.loop())
 
 
 if __name__ == '__main__':

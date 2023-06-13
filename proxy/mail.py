@@ -16,6 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
+from collections import UserDict
 import json
 from dataclasses import dataclass
 from json import JSONDecodeError
@@ -25,25 +26,22 @@ from pyservice import ProtocolException, client
 
 
 class Headers(dict):
+    def __init__(self, *args):
+        super(Headers, self).__init__(*args)
+
     @staticmethod
     def from_email_headers(headers: List[Dict[str, str]]) -> 'Headers':
         instance = Headers()
         for header in headers:
-            instance[header["name"]] = header["value"]
+            instance[header["name"].lower()] = header["value"]
         return instance
 
     @staticmethod
     def from_dictionary(headers: Dict[str, str]) -> 'Headers':
         instance = Headers()
         for key, value in headers.items():
-            instance[key] = value
+            instance[key.lower()] = value
         return instance
-
-    def __getitem__(self, key):
-        return super().__getitem__(key.lower())
-
-    def __setitem__(self, key, value):
-        super().__setitem__(key.lower(), value)
 
 
 @dataclass
@@ -51,7 +49,7 @@ class Message:
     headers: Headers
     body: str
 
-    def to_dictionary(self) -> Dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         """
         Converts the message to a dictionary.
 
@@ -63,13 +61,25 @@ class Message:
             "body": self.body
         }
 
+    @staticmethod
+    def from_dict(dict: Dict[str, Any]) -> 'Message':
+        """
+        Creates a message from the given dictionary.
 
-@dataclass
+        :param dict: The dictionary to create the message from.
+        :type dict: Dict[str, Any]
+        :return: The message created from the dictionary.
+        :rtype: Message
+        """
+        return Message(headers=dict['headers'], body=dict['body'])
+
+
+@ dataclass
 class Thread:
     id: str
     messages: List[Message]
 
-    def to_dictionary(self) -> Dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         """
         Converts the thread to a dictionary.
 
@@ -78,11 +88,25 @@ class Thread:
         """
         messages = []
         for message in self.messages:
-            messages.append(message.to_dictionary())
+            messages.append(message.to_dict())
         return {
             "id": self.id,
             "messages": messages
         }
+
+    @ staticmethod
+    def from_dict(dict: Dict[str, Any]) -> 'Thread':
+        """
+        Creates the thread from a dictionary.
+
+        :param dict: The dictionary to create the thread from.
+        :type dict: Dict[str, Any]
+        :return: The thread created from the dictionary.
+        """
+        thread = Thread(dict['id'], [])
+        for message_dict in dict['messages']:
+            thread.messages.append(Message.from_dict(message_dict))
+        return thread
 
 
 class Service:
@@ -139,9 +163,9 @@ class Service:
         # Get the list of emails in the thread.
         last_message = thread.messages[-1]
         from_emails = [email.strip()
-                       for email in last_message.headers['From'].split(',')]
+                       for email in last_message.headers['from'].split(',')]
         to_emails = [email.strip()
-                     for email in last_message.headers['To'].split(',')]
+                     for email in last_message.headers['to'].split(',')]
         list_of_emails = list(set(from_emails + to_emails))
         list_of_emails.remove(self.address_of_sender)
         mailto = ', '.join(list_of_emails)
@@ -151,9 +175,9 @@ class Service:
 
         arguments = [
             thread.id,
-            last_message.headers['Message-ID'],
+            last_message.headers['message-id'],
             mailto,
-            last_message.headers['Subject'],
+            last_message.headers['subject'],
             body,
         ]
         await client.call(self.endpoint, 'reply', arguments)

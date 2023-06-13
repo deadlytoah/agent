@@ -26,35 +26,35 @@ VARIABLES   Archived,       \* Set of archived Emails
             Arrived,        \* Queue of incoming Emails
             Completed,      \* Queue of completion responses
             RemoteOutbox,   \* Set of outgoing Emails
-            Parsed,         \* Set of parsed Emails
+            Queued,         \* Set of parsed Emails
             Abandoned       \* Set of failed Emails
-vars == << Abandoned, Archived, Arrived, Completed, Parsed, RemoteOutbox >>
-EmailsInQueue == Abandoned \cup Archived \cup Arrived \cup Completed \cup Parsed
+vars == << Abandoned, Archived, Arrived, Completed, Queued, RemoteOutbox >>
+EmailsInQueue == Abandoned \cup Archived \cup Arrived \cup Completed \cup Queued
 
 TypeOK ==   /\ Abandoned \subseteq Emails
             /\ Archived \subseteq Emails
             /\ Arrived \subseteq Emails
             /\ Completed \subseteq Emails
-            /\ Parsed \subseteq Emails
+            /\ Queued \subseteq Emails
             /\ RemoteOutbox \in Seq(Emails)
 
 Range(S) == { S[n] : n \in DOMAIN S }
 
 Invariants ==
-    /\ \A email \in Completed: email \notin Parsed => email \notin Arrived
+    /\ \A email \in Completed: email \notin Queued => email \notin Arrived
     (***********************************************************************)
     (* Don't parse e-mails more than once.                                 *)
     (***********************************************************************)
-    /\ \A email \in Range(RemoteOutbox): email \notin Completed => email \notin Parsed
+    /\ \A email \in Range(RemoteOutbox): email \notin Completed => email \notin Queued
     (***********************************************************************)
     (* Don't complete e-mails more than once.                              *)
     (***********************************************************************)
-    /\ \A email \in Abandoned: email \notin Arrived \cup Completed \cup Parsed
+    /\ \A email \in Abandoned: email \notin Arrived \cup Completed \cup Queued
     (***********************************************************************)
     (* Abandoned e-mails not to appear anywhere else, as Abandoned is a    *)
     (* general queue state separate from e-mail processing state.          *)
     (***********************************************************************)
-    /\ \A email \in Archived: email \notin Arrived \cup Completed \cup Parsed
+    /\ \A email \in Archived: email \notin Arrived \cup Completed \cup Queued
     (***********************************************************************)
     (* Same with archived emails.                                          *)
     (***********************************************************************)
@@ -68,7 +68,7 @@ ReceiveEmailOK(email) ==
     (* Enqueues an Email from Inbox to Arrived.                            *)
     (***********************************************************************)
     /\ Arrived' = Arrived \cup {email}
-    /\ UNCHANGED << Abandoned, Archived, Completed, Parsed, RemoteOutbox >>
+    /\ UNCHANGED << Abandoned, Archived, Completed, Queued, RemoteOutbox >>
 
 ReceiveEmailError(email) ==
     (***********************************************************************)
@@ -77,62 +77,64 @@ ReceiveEmailError(email) ==
     (* Inbox after addressing the issue.                                   *)
     (***********************************************************************)
     /\ Abandoned' = Abandoned \cup {email}
-    /\ UNCHANGED << Archived, Arrived, Completed, Parsed, RemoteOutbox >>
+    /\ UNCHANGED << Archived, Arrived, Completed, Queued, RemoteOutbox >>
 
 ReceiveEmail == /\ \E email \in Emails \ EmailsInQueue:
                     \/ ReceiveEmailOK(email)
                     \/ ReceiveEmailError(email)
 -----------------------------------------------------------------------------
-ParseEmail1OK(email) ==
+PrepareEmail1OK(email) ==
     (***********************************************************************)
-    (* The first step of parsing an e-mail response stores the parsed      *)
-    (* content in the queue.                                               *)
+    (* The first step of preparing an e-mail for completion is to parse    *)
+    (* the e-mail and update its status as Queued.  It then places the     *)
+    (* parsed message in the queue.  Thus there are two forms of the same  *)
+    (* e-mail in the queue at this point. This is an atomic operation.     *)
     (***********************************************************************)
-    /\ email \notin Parsed
-    /\ Parsed' = Parsed \cup {email}
+    /\ email \notin Queued
+    /\ Queued' = Queued \cup {email}
     /\ UNCHANGED << Abandoned, Archived, Arrived, Completed, RemoteOutbox >>
 
-ParseEmail2OK(email) ==
+PrepareEmail2OK(email) ==
     (***********************************************************************)
-    (* The second step of parsing removes the e-mail response from the     *)
-    (* queue only after the parsing is successful.  This ensures we don't  *)
-    (* lose any e-mails in case of a failure.                              *)
+    (* The second step of preparing removes the e-mail response from the   *)
+    (* Arrival queue only after the parsing is successful.  This ensures   *)
+    (* we don't lose any e-mails in case of a failure.                     *)
     (***********************************************************************)
-    /\ email \in Parsed
+    /\ email \in Queued
     /\ Arrived' = Arrived \ {email}
-    /\ UNCHANGED << Abandoned, Archived, Completed, Parsed, RemoteOutbox >>
+    /\ UNCHANGED << Abandoned, Archived, Completed, Queued, RemoteOutbox >>
 
-ParseEmailOK(email) ==
+PrepareEmailOK(email) ==
     (***********************************************************************)
-    (* Parses an email.  The sub-operations occur over distributed settings*)
-    (* and may fail.  Each sub-operation is atomic, and their order of     *)
-    (* execution is important.                                             *)
+    (* Prepares an email for completion.  The sub-operations occur over    *)
+    (* distributed settings and may fail.  Each sub-operation is atomic,   *)
+    (* and their order of execution is important.                          *)
     (***********************************************************************)
-    \/ ParseEmail1OK(email)
-    \/ ParseEmail2OK(email)
+    \/ PrepareEmail1OK(email)
+    \/ PrepareEmail2OK(email)
 
-ParseEmail1Error(email) ==
+PrepareEmail1Error(email) ==
     (***********************************************************************)
-    (* Fails parsing an email.                                             *)
+    (* Fails preparing an email.                                           *)
     (***********************************************************************)
-    /\ email \notin Parsed
+    /\ email \notin Queued
     /\ Abandoned' = Abandoned \cup {email}
     /\ Arrived' = Arrived \ {email}
-    /\ UNCHANGED << Archived, Completed, Parsed, RemoteOutbox >>
+    /\ UNCHANGED << Archived, Completed, Queued, RemoteOutbox >>
 
-ParseEmail ==
+PrepareEmail ==
     \E email \in Arrived \ Abandoned:
-        \/ ParseEmailOK(email)
-        \/ ParseEmail1Error(email)
+        \/ PrepareEmailOK(email)
+        \/ PrepareEmail1Error(email)
 -----------------------------------------------------------------------------
 CompleteMessage1OK(email) ==
     /\ email \notin Completed
     /\ Completed' = Completed \cup {email}
-    /\ UNCHANGED << Abandoned, Archived, Arrived, Parsed, RemoteOutbox >>
+    /\ UNCHANGED << Abandoned, Archived, Arrived, Queued, RemoteOutbox >>
 
 CompleteMessage2OK(email) ==
     /\ email \in Completed
-    /\ Parsed' = Parsed \ {email}
+    /\ Queued' = Queued \ {email}
     /\ UNCHANGED << Abandoned, Archived, Arrived, Completed, RemoteOutbox >>
 
 CompleteMessageOK(email) ==
@@ -142,11 +144,11 @@ CompleteMessageOK(email) ==
 CompleteMessage1Error(email) ==
     /\ email \notin Completed
     /\ Abandoned' = Abandoned \cup {email}
-    /\ Parsed' = Parsed \ {email}
+    /\ Queued' = Queued \ {email}
     /\ UNCHANGED << Archived, Arrived, Completed, RemoteOutbox >>
 
 CompleteMessage ==
-    \E email \in Parsed \ (Arrived \cup Abandoned):
+    \E email \in Queued \ (Arrived \cup Abandoned):
         \/ CompleteMessageOK(email)
         \/ CompleteMessage1Error(email)
 -----------------------------------------------------------------------------
@@ -156,7 +158,7 @@ SendOutCompletion1OK(email) ==
     (***********************************************************************)
     /\ email \notin Range(RemoteOutbox)     \* We haven't already sent this e-mail
     /\ RemoteOutbox' = Append(RemoteOutbox, email)
-    /\ UNCHANGED << Abandoned, Archived, Arrived, Completed, Parsed >>
+    /\ UNCHANGED << Abandoned, Archived, Arrived, Completed, Queued >>
 
 SendOutCompletion2OK(email) ==
     (***********************************************************************)
@@ -165,7 +167,7 @@ SendOutCompletion2OK(email) ==
     /\ email \in Range(RemoteOutbox)    \* Previous step to send this e-mail succeeded.
     /\ Archived' = Archived \cup {email}
     /\ Completed' = Completed \ {email}
-    /\ UNCHANGED << Abandoned, Arrived, Parsed, RemoteOutbox >>
+    /\ UNCHANGED << Abandoned, Arrived, Queued, RemoteOutbox >>
 
 SendOutCompletion1Error(email) ==
     (***********************************************************************)
@@ -174,10 +176,10 @@ SendOutCompletion1Error(email) ==
     /\ email \notin Range(RemoteOutbox)     \* We haven't already sent this e-mail
     /\ Abandoned' = Abandoned \cup {email}
     /\ Completed' = Completed \ {email}
-    /\ UNCHANGED << Archived, Arrived, Parsed, RemoteOutbox >>
+    /\ UNCHANGED << Archived, Arrived, Queued, RemoteOutbox >>
 
 SendOutCompletion ==
-    \E email \in Completed \ (Abandoned \cup Parsed):
+    \E email \in Completed \ (Abandoned \cup Queued):
         \/ SendOutCompletion1OK(email)
         \/ SendOutCompletion2OK(email)
         \/ SendOutCompletion1Error(email)
@@ -187,18 +189,18 @@ AllDone ==
     (* All done and system comes to equilibrium.                           *)
     (***********************************************************************)
     /\ Archived \cup Abandoned = Emails
-    /\ Parsed \ Abandoned = {}
+    /\ Queued \ Abandoned = {}
     /\ UNCHANGED vars
 
 Init == /\ Abandoned = {}
         /\ Archived = {}
         /\ Arrived = {}
         /\ Completed = {}
-        /\ Parsed = {}
+        /\ Queued = {}
         /\ RemoteOutbox = <<>>
 
 Next == \/ ReceiveEmail
-        \/ ParseEmail
+        \/ PrepareEmail
         \/ CompleteMessage
         \/ SendOutCompletion
         \/ AllDone

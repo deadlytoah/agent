@@ -17,7 +17,7 @@
 #
 
 import json
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from pyservice import client
 
@@ -39,7 +39,7 @@ class Message:
         self.role = role
         self.text = text
 
-    def to_dictionary(self) -> Dict[str, str]:
+    def to_dict(self) -> Dict[str, str]:
         """
         Converts the message to a dictionary containing the message
         role and text content.
@@ -50,10 +50,39 @@ class Message:
         return {"role": self.role, "content": self.text}
 
     @staticmethod
-    def from_dictionary(data: Dict[str, str]) -> 'Message':
+    def from_dict(data: Dict[str, str]) -> 'Message':
+        """
+        Converts the given dictionary to an instance of Message.
+
+        :arg data: A dictionary representing a message.
+        :type data: Dict[str, str]
+        :return: A message.
+        :rtype: Message
+        """
         role = data['role']
-        text = data['text']
+        text = data['content']
         return Message(role=role, text=text)
+
+    def to_json(self) -> str:
+        """
+        Converts the message to a JSON string.
+
+        :return: A JSON string representation of the message.
+        :rtype: str
+        """
+        return json.dumps(self.to_dict())
+
+    @staticmethod
+    def from_json(source: str) -> 'Message':
+        """
+        Converts a JSON string to a message.
+
+        :arg json: A JSON string representation of the message.
+        :type json: str
+        :return: A message.
+        :rtype: Message
+        """
+        return Message.from_dict(json.loads(source))
 
 
 class SystemMessage(Message):
@@ -77,25 +106,103 @@ class AssistantMessage(Message):
         super().__init__("assistant", text)
 
 
-class Service:
-    def __init__(self, endpoint):
-        self.endpoint = endpoint
+class GptMessageSeq:
+    """
+    Represents a sequence of messages for completion.
 
-    async def complete(self, messages: List[Message]) -> List[Message]:
+    :param messages: An optional sequence of messages.  If unspecified,
+                     GptMessageSeq prepares an empty sequence.
+    :type messages: List[Message]
+    """
+
+    def __init__(self: 'GptMessageSeq', messages: List[Message] = []):
+        self.messages = messages
+
+    def __len__(self) -> int:
+        return self.messages.__len__()
+
+    def append(self, message: Message):
         """
-        Sends a list of messages to the GPT-3 API.
+        Appends a message to the sequence.
 
-        Args:
-            messages (List[Message]): A list of messages.
+        :param message: The message to append.
+        :type message: Message
+        """
+        self.messages.append(message)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Converts the message sequence to a dictionary.
 
         Returns:
-            List[Message]: A list of messages.
-
-        Raises:
-            GptException: If an error occurs while sending the
-                          messages to the GPT-3 API.
+            A dictionary representation of the message sequence.
         """
-        messages_as_string = [json.dumps(
-            message.to_dictionary()) for message in messages]
-        response = await client.call(self.endpoint, 'complete', messages_as_string)
-        return [Message.from_dictionary(json.loads(message)) for message in response]
+        return {'messages': [message.to_dict() for message in self.messages]}
+
+    @staticmethod
+    def from_dict(dict: Dict[str, Any]) -> 'GptMessageSeq':
+        """
+        Converts a dictionary to an instance of GptMessageSeq.
+
+        :arg dict: A dictionary representation of the message sequence.
+        :type dict: Dict[str, Any]
+        :return: A message sequence.
+        :rtype: GptMessageSeq
+        """
+        return GptMessageSeq([Message.from_dict(message) for message in dict['messages']])
+
+    def to_list(self) -> List[str]:
+        """
+        Converts the instance of GptMessageSeq to a list of messages.
+
+        :return: A list representation of the message sequence.
+        :rtype: List[str]
+        """
+        return [message.text for message in self.messages]
+
+    @staticmethod
+    def from_json_list(list: List[str]) -> 'GptMessageSeq':
+        """
+        Converts a list to an instance of GptMessageSeq.
+
+        :arg list: A list representation of the message sequence.
+        :type list: List[str]
+        :return: A message sequence.
+        :rtype: GptMessageSeq
+        """
+        return GptMessageSeq([Message.from_json(json) for json in list])
+
+
+class GptService:
+    """
+    Acts as a proxy to the GPT service that interfaces with the OpenAI's
+    GPT-3 chat completion API.
+
+    :param endpoint: The endpoint of the GPT-3 API.
+    :type endpoint: str
+    """
+
+    def __init__(self, endpoint: str):
+        self.endpoint = endpoint
+
+    async def complete(self, messages: GptMessageSeq) -> GptMessageSeq:
+        """
+        Sends a list of messages for a chat completion.
+
+        :param messages: A list of messages to send.  This is a leading
+                         system message followed by an alternating
+                         sequence of user and assistant messages.
+        :type messages: GptMessageSeq
+        :return: A list of messages in the completion response.
+        :rtype: GptMessageSeq
+        :raises InvalidRequestError: The request was malformed or missing
+                                     some required parameters, such as a
+                                     token or an input.
+        The request exceeded the maximum allowed number of tokens.
+        """
+        response = await client.call(self.endpoint, 'complete', messages.to_list())
+
+        role = response[1]
+        content = response[2]
+        messages.append(Message(role, content))
+        return messages

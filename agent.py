@@ -33,9 +33,8 @@ MAXIMUM_CHANNEL_SIZE = 128
 
 
 def __create_email_controller() -> EmailController:
-    mail_service = mail_proxy.Service(
-        configuration['email_service_endpoint'], AGENT_EMAIL_ADDRESS)
-    return EmailController(mail_service)
+    mail_service = mail_proxy.Service(configuration['email_service_endpoint'])
+    return EmailController(mail_service, AGENT_EMAIL_ADDRESS)
 
 
 async def main(configuration: Configuration) -> None:

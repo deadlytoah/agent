@@ -33,6 +33,7 @@ class SetOfAddresses(set):
                            joined by a comma.
     :type server_address: str
     """
+
     def __init__(self, server_address: str) -> None:
         super(SetOfAddresses, self).__init__()
         for addr_string in server_address.split(','):
@@ -50,8 +51,9 @@ class EmailController:
     :type email_service: Service
     """
 
-    def __init__(self, email_service: Service):
+    def __init__(self, email_service: Service, address_of_sender: str):
         self.email_service = email_service
+        self.address_of_sender = address_of_sender
 
     async def next_thread(self) -> Optional[Thread]:
         """
@@ -85,4 +87,20 @@ class EmailController:
         :param body: The message body.
         :type body: str
         """
-        await self.email_service.reply(thread, body)
+
+        # Reply to the last email in the thread, responding to all parties
+        # involved.
+        last_message = thread.messages[-1]
+        from_emails = SetOfAddresses(last_message.headers['from'])
+        to_emails = SetOfAddresses(last_message.headers['to'])
+        to_emails.update(from_emails)
+        if self.address_of_sender in to_emails:
+            to_emails.remove(self.address_of_sender)
+
+        message_id = last_message.headers['message-id']
+        mailto = ', '.join(to_emails)
+        subject = last_message.headers['subject']
+
+        # TODO: CC and BCC
+
+        await self.email_service.reply(thread.id, message_id, mailto, subject, body)

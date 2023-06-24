@@ -16,7 +16,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
-from collections import UserDict
 import json
 from dataclasses import dataclass
 from json import JSONDecodeError
@@ -110,9 +109,8 @@ class Thread:
 
 
 class Service:
-    def __init__(self, endpoint: str, address_of_sender: str):
+    def __init__(self, endpoint: str):
         self.endpoint = endpoint
-        self.address_of_sender = address_of_sender
 
     async def next_thread(self) -> Optional[Thread]:
         """
@@ -147,7 +145,7 @@ class Service:
         else:
             return None
 
-    async def reply(self, thread: Thread, body: str):
+    async def reply(self, thread_id: str, message_id: str, mailto: str, subject: str, body: str):
         """
         Replies to a thread with a message.
 
@@ -160,24 +158,11 @@ class Service:
                             thread.
         """
 
-        # Get the list of emails in the thread.
-        last_message = thread.messages[-1]
-        from_emails = [email.strip()
-                       for email in last_message.headers['from'].split(',')]
-        to_emails = [email.strip()
-                     for email in last_message.headers['to'].split(',')]
-        list_of_emails = list(set(from_emails + to_emails))
-        list_of_emails.remove(self.address_of_sender)
-        mailto = ', '.join(list_of_emails)
-
-        # TODO: Unescape Unicode characters in the subject.
-        # TODO: CC and BCC
-
         arguments = [
-            thread.id,
-            last_message.headers['message-id'],
+            thread_id,
+            message_id,
             mailto,
-            last_message.headers['subject'],
+            subject,
             body,
         ]
         await client.call(self.endpoint, 'reply', arguments)

@@ -21,12 +21,10 @@ from asyncio import Queue
 from sys import stderr
 from typing import AsyncIterator
 
-from openai import InvalidRequestError
-
 from controller.email import EmailController, SetOfAddresses
 from controller.msgq import EmailMessage, EmailMsgqController, EmailStatus
 from proxy import gpt, mail
-from proxy.gpt import GptMessageSeq, GptService
+from proxy.gpt import GptMessageSeq, GptService, InvalidRequestException
 from proxy.msgq import DatabaseConstraintException
 
 AGENT_EMAIL_ADDRESS = 'thevoicekorea+chat@gmail.com'
@@ -154,7 +152,7 @@ class EmailHandler:
                         # in the TLA+ specification, Agent.tla.
                         try:
                             completion_message = await self.__gpt_complete(message)
-                        except InvalidRequestError as e:
+                        except InvalidRequestException as e:
                             # The request was malformed or the maximum allowed number of
                             # tokens were exceeded.  This error is not transient.
                             await self.__abandon(message, str(e))

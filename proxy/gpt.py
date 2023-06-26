@@ -16,10 +16,22 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
+from enum import Enum
 import json
 from typing import Any, Dict, List
 
 from pyservice import client
+from pyservice.client import ServiceException
+
+
+class GptErrorCode(Enum):
+    INVALID_REQUEST = "ERROR_INVALID_REQUEST"
+
+
+class InvalidRequestException(ServiceException):
+    def __init__(self, reason: str):
+        super(ServiceException, self).__init__(
+            GptErrorCode.INVALID_REQUEST, reason)
 
 
 class Message:
@@ -200,8 +212,13 @@ class GptService:
                                      token or an input.
         The request exceeded the maximum allowed number of tokens.
         """
-        response = await client.call(self.endpoint, 'complete', messages.to_list())
-
+        try:
+            response = await client.call(self.endpoint, 'complete', messages.to_list())
+        except ServiceException as e:
+            if e.error_code == GptErrorCode.INVALID_REQUEST.value:
+                raise InvalidRequestException(e.reason)
+            else:
+                raise
         role = response[1]
         content = response[2]
         messages.append(Message(role, content))
